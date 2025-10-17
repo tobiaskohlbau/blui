@@ -6,6 +6,8 @@ const ftp = @import("ftp");
 const mqtt = @import("mqtt");
 const http = @import("http");
 
+const ui = @import("ui");
+
 pub const std_options: std.Options = .{
     .log_level = .debug,
     .logFn = logFn,
@@ -231,54 +233,49 @@ const HttpHandlers = struct {
     }
 
     pub fn notFound(self: *HttpHandlers, req: *std.http.Server.Request) !void {
-        const ui_path = "./ui/build";
+        var headers: [1]std.http.Header = undefined;
+        headers[0].name = "content-type";
+        headers[0].value = "text/html";
 
         const path = req.head.target;
 
-        const file_path = try std.fs.path.join(self.allocator, &.{ ui_path, path });
-        const fallback_path = try std.fs.path.join(self.allocator, &.{ ui_path, "200.html" });
-
-        var extra_headers: [32]std.http.Header = undefined;
-        var headers = &extra_headers;
-        var header_length: usize = 0;
-        const stat = try std.fs.cwd().statFile(file_path);
-        var file: std.fs.File = undefined;
-        if (stat.kind == .directory) {
-            file = try std.fs.cwd().openFile(fallback_path, .{});
-            (&extra_headers)[0].name = "content-type";
-            headers[0].name = "content-type";
-            headers[0].value = "text/html";
-            header_length += 1;
-        } else if (stat.kind == .file) {
-            file = try std.fs.cwd().openFile(file_path, .{});
-            if (std.mem.eql(u8, path[path.len - 3 ..], ".js")) {
-                headers[0].name = "content-type";
-                headers[0].value = "text/javascript";
-                header_length += 1;
-            }
-        } else {
-            return error.BadRequest;
+        if (path.len > 3 and std.mem.eql(u8, path[path.len - 3 ..], ".js")) {
+            headers[0].value = "text/javascript";
+        } else if (path.len > 4 and std.mem.eql(u8, path[path.len - 4 ..], ".css")) {
+            headers[0].value = "text/css";
         }
+
         const response_options: std.http.Server.Request.RespondOptions = .{
-            .extra_headers = headers[0..header_length],
+            .extra_headers = &headers,
         };
 
         const read_buf = try self.allocator.alloc(u8, 8192);
         var write_buf: [8192 * 1024]u8 = undefined;
         defer self.allocator.free(read_buf);
 
-        const file_stat = try file.stat();
-        var body_writer = try req.respondStreaming(&write_buf, .{
-            .content_length = file_stat.size,
-            .respond_options = response_options,
-        });
-
-        try body_writer.flush();
-
-        var file_reader = file.reader(read_buf);
-        var writer = &body_writer.writer;
-        _ = try writer.sendFileAll(&file_reader, .unlimited);
-        try body_writer.flush();
+        if (ui.fs.get(req.head.target[1..])) |data| {
+            var body_writer = try req.respondStreaming(&write_buf, .{
+                .content_length = data.len,
+                .respond_options = response_options,
+            });
+            try body_writer.flush();
+            var writer = &body_writer.writer;
+            try writer.writeAll(data);
+            try writer.flush();
+            try body_writer.flush();
+        } else if (ui.fs.get("200.html")) |data| {
+            var body_writer = try req.respondStreaming(&write_buf, .{
+                .content_length = data.len,
+                .respond_options = response_options,
+            });
+            try body_writer.flush();
+            var writer = &body_writer.writer;
+            try writer.writeAll(data);
+            try writer.flush();
+            try body_writer.flush();
+        } else {
+            return error.BadRequest;
+        }
     }
 };
 
@@ -463,10 +460,11 @@ pub fn main() !void {
     std.log.debug("{}", .{config});
 
     var bundle = std.crypto.Certificate.Bundle{};
-    config.ca_bundle = bundle;
+    // config.ca_bundle = bundle;
     try bundle.addCertsFromFilePath(allocator, std.fs.cwd(), "certificate.pem");
     std.log.debug("Certificates in bundle: {d}\n", .{bundle.map.size});
-    var mqtt_client = mqtt.Client{ .allocator = allocator, .ca_bundle = bundle };
+    // var mqtt_client = mqtt.Client{ .allocator = allocator, .ca_bundle = bundle };
+    var mqtt_client = mqtt.Client{ .allocator = allocator };
 
     var mqtt_conn = try mqtt_client.connect(config.ip, 8883, .tls, .{ .username = "bblp", .password = config.access_code, .client_id = "blui", .keepalive_sec = 0 });
 
@@ -540,7 +538,8 @@ pub fn main() !void {
 }
 
 fn handleWebcam(allocator: std.mem.Allocator, http_handlers: *HttpHandlers, config: *Config) !void {
-    var webcam_client = webcam.Client{ .allocator = allocator, .ca_bundle = config.ca_bundle };
+    // var webcam_client = webcam.Client{ .allocator = allocator, .ca_bundle = config.ca_bundle };
+    var webcam_client = webcam.Client{ .allocator = allocator, .ca_bundle = null };
     const webcam_conn = try webcam_client.connect(config.ip, 6000, .{
         .username = "bblp",
         .password = config.access_code,
