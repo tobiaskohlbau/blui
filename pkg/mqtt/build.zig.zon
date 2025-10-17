@@ -1,0 +1,7 @@
+.{
+    .name = .mqtt,
+    .version = "0.0.1",
+    .minimum_zig_version = "0.16.0-dev.703+07b6dbf8c",
+    .paths = .{""},
+    .fingerprint = 0xa100fb7200b3ff2d,
+}

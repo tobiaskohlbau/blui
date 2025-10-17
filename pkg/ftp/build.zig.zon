@@ -1,0 +1,7 @@
+.{
+    .name = .ftp,
+    .version = "0.0.1",
+    .minimum_zig_version = "0.16.0-dev.703+07b6dbf8c",
+    .paths = .{""},
+    .fingerprint = 0xa84da34e6403cad0,
+}
