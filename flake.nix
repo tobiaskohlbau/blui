@@ -20,6 +20,8 @@
         packages = [
           zigpkgs.master
           unstable.zls
+          pkgs.nodejs
+          pkgs.pnpm
         ];
 
         nativeBuildInputs = with pkgs; [
