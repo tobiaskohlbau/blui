@@ -12,7 +12,7 @@
             .path = "./pkg/ftp",
         },
     },
-    .minimum_zig_version = "0.16.0-dev.452+1f7ee99b3",
+    .minimum_zig_version = "0.16.0-dev.731+958faa703",
     .paths = .{"src/main.zig"},
     .fingerprint = 0x9780869fbac6c39f,
 }
