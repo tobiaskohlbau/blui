@@ -18,7 +18,7 @@ With **blui**, you can upload, manage, and start prints directly from **OrcaSlic
 ## 🧰 Installation and usage
 
 ```bash
-git clone https://github.com/yourusername/blui.git
+git clone https://github.com/tobiaskohlbau/blui.git
 cd blui
 zig build
 ./zig-out/bin/blui --accessCode PRINTER_ACCESS_CODE --ip PRINTER_IP --serial PRINTER_SERIAL
