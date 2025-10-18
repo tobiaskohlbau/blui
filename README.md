@@ -34,10 +34,6 @@ minisign -Vm blUI-<platform> -P RWS1ZZW+8Lw8jDYlM1i8G7Panirg9TpHUz+Hj77wfk4/Qaxy
 ```bash
 git clone https://github.com/tobiaskohlbau/blui.git
 cd blui
-cd ui
-pnpm install
-pnpm build
-cd ..
 zig build
 ./zig-out/bin/blUI --accessCode PRINTER_ACCESS_CODE --ip PRINTER_IP --serial PRINTER_SERIAL
 ```
