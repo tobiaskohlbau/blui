@@ -112,7 +112,6 @@ jobs:
           files: ./${{ matrix.artifact_name }}.minisig
 
       - name: Generate checksums
-        if: runner.os == 'Linux' && matrix.target == 'x86_64-linux'
         run: |
           sha256sum ${{ matrix.artifact_name }} > ${{ matrix.artifact_name }}.sha256
         shell: bash
