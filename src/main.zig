@@ -530,11 +530,11 @@ pub fn main() !void {
         allocator,
         &http_handlers,
     });
-    // const webcam_thread = try std.Thread.spawn(.{}, handleWebcam, .{ allocator, &http_handlers, &config });
+    const webcam_thread = try std.Thread.spawn(.{}, handleWebcam, .{ allocator, &http_handlers, &config });
 
     mqtt_thread.join();
     http_thread.join();
-    // webcam_thread.join();
+    webcam_thread.join();
 }
 
 fn handleWebcam(allocator: std.mem.Allocator, http_handlers: *HttpHandlers, config: *Config) !void {
