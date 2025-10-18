@@ -17,6 +17,20 @@ With **blui**, you can upload, manage, and start prints directly from **OrcaSlic
 
 ## 🧰 Installation and usage
 
+### Using pre-built binaries (recommended)
+
+Download the latest nightly build from the [GitHub Releases](https://github.com/tobiaskohlbau/blui/releases) page.
+
+### Verify the signature
+
+All releases are signed with [minisign](https://jedisct1.github.io/minisign/). To verify the signature:
+
+```bash
+minisign -Vm blui-<platform> -P RWS1ZZW+8Lw8jDYlM1i8G7Panirg9TpHUz+Hj77wfk4/Qaxym21lt+wI
+```
+
+### Building from source
+
 ```bash
 git clone https://github.com/tobiaskohlbau/blui.git
 cd blui
