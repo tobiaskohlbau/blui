@@ -16,14 +16,14 @@ pub fn build(b: *std.Build) void {
     tool_step.addDirectoryArg(b.path("ui/build/"));
     const output = tool_step.addOutputFileArg("ui.zig");
 
-    const module = b.addModule("blui", .{
+    const module = b.addModule("blUI", .{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
 
     const exe = b.addExecutable(.{
-        .name = "blui",
+        .name = "blUI",
         .root_module = module,
     });
 

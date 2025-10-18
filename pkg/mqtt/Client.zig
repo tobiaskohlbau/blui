@@ -449,6 +449,6 @@ pub fn connect(client: *Client, host: []const u8, port: u16, protocol: Protocol,
         },
     };
 
-    try conn.connect("blui", options.username, options.password);
+    try conn.connect("blUI", options.username, options.password);
     return conn;
 }
