@@ -52,13 +52,11 @@ jobs:
         with:
           version: 10
 
-      - name: Build UI (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: nix develop --command bash -c "cd ui && pnpm install && pnpm run build"
-
-      - name: Build UI (Windows)
+      - name: Install Node.js (Windows)
         if: runner.os == 'Windows'
-        run: cd ui && pnpm install && pnpm run build
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: 'lts/*'
 
       - name: Build binary (Linux/macOS)
         if: runner.os != 'Windows'

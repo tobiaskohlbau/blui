@@ -4,6 +4,23 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const node_modules_exists = blk: {
+        var dir = std.fs.cwd().openDir("ui/node_modules", .{}) catch break :blk false;
+        defer dir.close();
+        break :blk true;
+    };
+
+    const pnpm_install = if (!node_modules_exists) b.addSystemCommand(&[_][]const u8{ "pnpm", "install" }) else null;
+    if (pnpm_install) |install| {
+        install.cwd = b.path("ui");
+    }
+
+    const ui_build_step = b.addSystemCommand(&[_][]const u8{ "pnpm", "build" });
+    ui_build_step.cwd = b.path("ui");
+    if (pnpm_install) |install| {
+        ui_build_step.step.dependOn(&install.step);
+    }
+
     const embed_files = b.addExecutable(.{
         .name = "embed_fs",
         .root_module = b.createModule(.{
@@ -13,6 +30,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const tool_step = b.addRunArtifact(embed_files);
+    tool_step.step.dependOn(&ui_build_step.step);
     tool_step.addDirectoryArg(b.path("ui/build/"));
     const output = tool_step.addOutputFileArg("ui.zig");
 
