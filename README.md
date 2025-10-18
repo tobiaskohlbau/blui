@@ -1,8 +1,8 @@
-# blui
+# blUI
 
-**blui** is an open-source integration layer for **OrcaSlicer**, providing functionality similar to the **BambuLab® plugin**, but without relying on any closed-source or proprietary binaries.
+**blUI** is an open-source integration layer for **OrcaSlicer**, providing functionality similar to the **BambuLab® plugin**, but without relying on any closed-source or proprietary binaries.
 
-With **blui**, you can upload, manage, and start prints directly from **OrcaSlicer** — all using transparent, community-auditable code.
+With **blUI**, you can upload, manage, and start prints directly from **OrcaSlicer** — all using transparent, community-auditable code.
 
 ---
 
@@ -26,7 +26,7 @@ Download the latest nightly build from the [GitHub Releases](https://github.com/
 All releases are signed with [minisign](https://jedisct1.github.io/minisign/). To verify the signature:
 
 ```bash
-minisign -Vm blui-<platform> -P RWS1ZZW+8Lw8jDYlM1i8G7Panirg9TpHUz+Hj77wfk4/Qaxym21lt+wI
+minisign -Vm blUI-<platform> -P RWS1ZZW+8Lw8jDYlM1i8G7Panirg9TpHUz+Hj77wfk4/Qaxym21lt+wI
 ```
 
 ### Building from source
@@ -39,7 +39,7 @@ pnpm install
 pnpm build
 cd ..
 zig build
-./zig-out/bin/blui --accessCode PRINTER_ACCESS_CODE --ip PRINTER_IP --serial PRINTER_SERIAL
+./zig-out/bin/blUI --accessCode PRINTER_ACCESS_CODE --ip PRINTER_IP --serial PRINTER_SERIAL
 ```
 
 ---

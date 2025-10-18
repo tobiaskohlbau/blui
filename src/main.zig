@@ -466,7 +466,7 @@ pub fn main() !void {
     // var mqtt_client = mqtt.Client{ .allocator = allocator, .ca_bundle = bundle };
     var mqtt_client = mqtt.Client{ .allocator = allocator };
 
-    var mqtt_conn = try mqtt_client.connect(config.ip, 8883, .tls, .{ .username = "bblp", .password = config.access_code, .client_id = "blui", .keepalive_sec = 0 });
+    var mqtt_conn = try mqtt_client.connect(config.ip, 8883, .tls, .{ .username = "bblp", .password = config.access_code, .client_id = "blUI", .keepalive_sec = 0 });
 
     defer {
         mqtt_conn.disconnect() catch |err| {

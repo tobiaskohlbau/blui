@@ -1,5 +1,5 @@
 .{
-    .name = .blui,
+    .name = .blUI,
     .version = "0.0.1",
     .dependencies = .{
         .http = .{
@@ -14,5 +14,5 @@
     },
     .minimum_zig_version = "0.16.0-dev.731+958faa703",
     .paths = .{"src/main.zig"},
-    .fingerprint = 0x9780869fbac6c39f,
+    .fingerprint = 0x396a82f5e0b03560,
 }
