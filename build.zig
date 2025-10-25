@@ -44,6 +44,23 @@ const UiBuildStep = struct {
             if (term != .Exited or term.Exited != 0) {
                 return error.PnpmInstallFailed;
             }
+
+            const node_modules_path = try std.fs.path.join(b.allocator, &.{ ui_dir, "node_modules" });
+            defer b.allocator.free(node_modules_path);
+
+            const node_modules_dir = try b.build_root.handle.openDir(node_modules_path, .{ .iterate = true });
+            var walker = try node_modules_dir.walk(b.allocator);
+            while (try walker.next()) |entry| {
+                switch (entry.kind) {
+                    .file => {
+                        const sub = try std.fs.path.join(b.allocator, &.{ node_modules_path, entry.path });
+                        defer b.allocator.free(sub);
+                        _ = try install_man.addFilePost(sub);
+                    },
+                    else => {},
+                }
+            }
+
             try step.writeManifestAndWatch(&install_man);
         }
 
