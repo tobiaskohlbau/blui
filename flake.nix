@@ -18,22 +18,13 @@
     {
       devShells.default = pkgs.mkShell {
         packages = [
-          zigpkgs.master
+          zigpkgs."master-2025-10-17"
           unstable.zls
           pkgs.nodejs
           pkgs.pnpm
         ];
 
-        nativeBuildInputs = with pkgs; [
-          pkg-config
-        ];
-
-        shellHook = ''
-          #PATH="$PATH:/Users/tobias/src/github.com/ziglang/zig/build/stage3/bin"
-          echo "zig" "$(zig version)"
-          unset NIX_CFLAGS_COMPILE
-          unset NIX_LDFLAGS
-        '';
+        shellHook = '''';
       };
     });
 }
