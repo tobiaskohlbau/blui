@@ -459,9 +459,17 @@ pub fn main() !void {
 
     std.log.debug("{}", .{config});
 
+    const cert_path = "certificate.pem";
+    const embedded_cert = @embedFile(cert_path);
+
+    std.fs.cwd().access(cert_path, .{}) catch {
+        const file = try std.fs.cwd().createFile(cert_path, .{});
+        defer file.close();
+        try file.writeAll(embedded_cert);
+    };
+
     var bundle = std.crypto.Certificate.Bundle{};
-    // config.ca_bundle = bundle;
-    try bundle.addCertsFromFilePath(allocator, std.fs.cwd(), "certificate.pem");
+    try bundle.addCertsFromFilePath(allocator, std.fs.cwd(), cert_path);
     std.log.debug("Certificates in bundle: {d}\n", .{bundle.map.size});
     // var mqtt_client = mqtt.Client{ .allocator = allocator, .ca_bundle = bundle };
     var mqtt_client = mqtt.Client{ .allocator = allocator };
