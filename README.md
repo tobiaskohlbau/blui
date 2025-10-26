@@ -38,6 +38,26 @@ zig build
 ./zig-out/bin/blUI --accessCode PRINTER_ACCESS_CODE --ip PRINTER_IP --serial PRINTER_SERIAL
 ```
 
+### Configuration
+
+blUI required a configuration file. The file is expected to be in ZON format and located at:
+
+- **macOS:** `$XDG_CONFIG_HOME/blui/config.zon`
+- **Linux:** `$XDG_CONFIG_HOME/blui/config.zon`
+- **Windows:** `%APPDATA%/blui/config.zon`
+
+Command-line arguments override the configuration file values.
+
+Example `config.zon`:
+
+```zon
+.{
+    .access_code = "your_printer_access_code",
+    .ip = "printer_ip_address",
+    .serial = "printer_serial_number",
+}
+```
+
 ---
 
 ## ⚙️ Compatibility
