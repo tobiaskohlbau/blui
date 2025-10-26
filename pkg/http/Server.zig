@@ -3,112 +3,95 @@ const net = std.net;
 
 const Options = struct {};
 
-pub fn Server(comptime T: type) type {
-    return struct {
-        const Self = @This();
+const Server = @This();
 
-        pub const Handler = *const fn (context: T, request: *std.http.Server.Request) anyerror!void;
+const ConnectionList = std.array_list.Aligned(std.net.Server.Connection, null);
 
-        const ConnectionList = std.array_list.Aligned(std.net.Server.Connection, null);
+pub const Handler = struct {
+    vtable: *const VTable,
 
-        allocator: std.mem.Allocator,
-        context: T,
-        port: u16,
-        router: *std.StringArrayHashMapUnmanaged(Handler),
-        not_found_handler: Handler = defaultNotFoundHandler,
-
-        fn defaultNotFoundHandler(_: T, request: *std.http.Server.Request) !void {
-            try request.respond("not found", .{
-                .status = .not_found,
-            });
-        }
-
-        pub fn stop(s: *Self) !void {
-            _ = s;
-        }
-
-        pub fn listen(s: *Self) !void {
-            const addr = try std.net.Address.parseIp("0.0.0.0", s.port);
-            var tcp_server = try addr.listen(.{
-                .reuse_address = true,
-            });
-
-            const num_threads = 4;
-            var threads: [num_threads]std.Thread = undefined;
-            var thread_pool = try ConnectionList.initCapacity(s.allocator, 100 * num_threads);
-            var mutex = std.Thread.Mutex{};
-            var cond = std.Thread.Condition{};
-
-            for (&threads) |*t| {
-                t.* = try std.Thread.spawn(.{}, worker, .{ s, &thread_pool, &mutex, &cond });
-            }
-
-            while (true) {
-                const conn = try tcp_server.accept();
-
-                mutex.lock();
-                try thread_pool.append(s.allocator, conn);
-                cond.signal();
-                mutex.unlock();
-            }
-        }
-
-        fn worker(s: *Self, pool: *ConnectionList, mutex: *std.Thread.Mutex, cond: *std.Thread.Condition) void {
-            while (true) {
-                mutex.lock();
-                while (pool.items.len == 0) {
-                    cond.wait(mutex);
-                }
-                const conn = pool.pop();
-                mutex.unlock();
-
-                if (conn == null) {
-                    continue;
-                }
-
-                handleRequest(s, conn.?) catch |err| {
-                    std.log.err("Error handling request: {}", .{err});
-                };
-            }
-        }
-
-        fn handleRequest(s: *Self, conn: std.net.Server.Connection) !void {
-            defer conn.stream.close();
-
-            var read_buffer: [8192]u8 = undefined;
-            var write_buffer: [8192]u8 = undefined;
-            var stream_reader = conn.stream.reader(&read_buffer);
-            var stream_writer = conn.stream.writer(&write_buffer);
-            const reader = stream_reader.interface();
-            const writer = &stream_writer.interface;
-
-            var http_server = std.http.Server.init(reader, writer);
-
-            // Support keep-alive for HTTP/1.1
-            while (true) {
-                var req = http_server.receiveHead() catch |err| {
-                    if (err == error.EndOfStream) break; // Connection closed by client
-                    return err;
-                };
-
-                var path = req.head.target;
-                if (std.mem.findAnyPos(u8, req.head.target, 0, &.{ '?', '#' })) |pos| {
-                    path = path[0..pos];
-                }
-                if (s.router.get(path)) |handler| {
-                    try handler(s.context, &req);
-                } else {
-                    s.not_found_handler(s.context, &req) catch |err| {
-                        std.log.debug("error in not found handler: {}", .{err});
-                        try Self.defaultNotFoundHandler(s.context, &req);
-                    };
-                }
-
-                // Drop connection if keep alive is not requested
-                if (!req.head.keep_alive) {
-                    break;
-                }
-            }
-        }
+    pub const VTable = struct {
+        handle: *const fn (h: *Handler, req: *std.http.Server.Request) anyerror!void,
     };
+};
+
+allocator: std.mem.Allocator,
+port: u16,
+handler: *Handler,
+
+pub fn stop(s: *Server) !void {
+    _ = s;
+}
+
+pub fn listen(s: *Server) !void {
+    const addr = try std.net.Address.parseIp("0.0.0.0", s.port);
+    var tcp_server = try addr.listen(.{
+        .reuse_address = true,
+    });
+
+    const num_threads = 4;
+    var threads: [num_threads]std.Thread = undefined;
+    var thread_pool = try ConnectionList.initCapacity(s.allocator, 100 * num_threads);
+    var mutex = std.Thread.Mutex{};
+    var cond = std.Thread.Condition{};
+
+    for (&threads) |*t| {
+        t.* = try std.Thread.spawn(.{}, worker, .{ s, &thread_pool, &mutex, &cond });
+    }
+
+    while (true) {
+        const conn = try tcp_server.accept();
+
+        mutex.lock();
+        try thread_pool.append(s.allocator, conn);
+        cond.signal();
+        mutex.unlock();
+    }
+}
+
+fn worker(s: *Server, pool: *ConnectionList, mutex: *std.Thread.Mutex, cond: *std.Thread.Condition) void {
+    while (true) {
+        mutex.lock();
+        while (pool.items.len == 0) {
+            cond.wait(mutex);
+        }
+        const conn = pool.pop();
+        mutex.unlock();
+
+        if (conn == null) {
+            continue;
+        }
+
+        handleRequest(s, conn.?) catch |err| {
+            std.log.err("Error handling request: {}", .{err});
+        };
+    }
+}
+
+fn handleRequest(s: *Server, conn: std.net.Server.Connection) !void {
+    defer conn.stream.close();
+
+    var read_buffer: [8192]u8 = undefined;
+    var write_buffer: [8192]u8 = undefined;
+    var stream_reader = conn.stream.reader(&read_buffer);
+    var stream_writer = conn.stream.writer(&write_buffer);
+    const reader = stream_reader.interface();
+    const writer = &stream_writer.interface;
+
+    var http_server = std.http.Server.init(reader, writer);
+
+    // Support keep-alive for HTTP/1.1
+    while (true) {
+        var req = http_server.receiveHead() catch |err| {
+            if (err == error.EndOfStream) break; // Connection closed by client
+            return err;
+        };
+
+        try s.handler.vtable.handle(s.handler, &req);
+
+        // Drop connection if keep alive is not requested
+        if (!req.head.keep_alive) {
+            break;
+        }
+    }
 }
