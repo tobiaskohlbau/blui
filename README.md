@@ -6,6 +6,12 @@ With **blUI**, you can upload, manage, and start prints directly from **OrcaSlic
 
 ---
 
+## ⚠️ Development Status
+
+blUI is in early development. Bugs are expected. Use at your own risk.
+
+---
+
 ## ✨ Features
 
 - 🚀 Upload print jobs from OrcaSlicer  
@@ -62,7 +68,17 @@ Example `config.zon`:
 
 ## ⚙️ Compatibility
 
-- **OrcaSlicer:** ✅ Supported  
+## Slicer support
+
+- **OrcaSlicer:** ✅ Supported
+
+### Printer Support
+
+| Printer Model   | Working           | Notes            |
+|-----------------|-------------------|------------------|
+| BambuLab P1S    | ✅                |                  |
+
+Note: Every first gen printer should work, but I only own the BambuLab P1S for testing.
 
 ---
 
