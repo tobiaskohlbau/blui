@@ -29,46 +29,14 @@ pub fn listen(s: *Server) !void {
         .reuse_address = true,
     });
 
-    const num_threads = 4;
-    var threads: [num_threads]std.Thread = undefined;
-    var thread_pool = try ConnectionList.initCapacity(s.allocator, 100 * num_threads);
-    var mutex = std.Thread.Mutex{};
-    var cond = std.Thread.Condition{};
-
-    for (&threads) |*t| {
-        t.* = try std.Thread.spawn(.{}, worker, .{ s, &thread_pool, &mutex, &cond });
-    }
-
     while (true) {
         const conn = try tcp_server.accept();
-
-        mutex.lock();
-        try thread_pool.append(s.allocator, conn);
-        cond.signal();
-        mutex.unlock();
+        const t = try std.Thread.spawn(.{}, handleRequest, .{ s, conn });
+        t.detach();
     }
 }
 
-fn worker(s: *Server, pool: *ConnectionList, mutex: *std.Thread.Mutex, cond: *std.Thread.Condition) void {
-    while (true) {
-        mutex.lock();
-        while (pool.items.len == 0) {
-            cond.wait(mutex);
-        }
-        const conn = pool.pop();
-        mutex.unlock();
-
-        if (conn == null) {
-            continue;
-        }
-
-        handleRequest(s, conn.?) catch |err| {
-            std.log.err("Error handling request: {}", .{err});
-        };
-    }
-}
-
-fn handleRequest(s: *Server, conn: std.net.Server.Connection) !void {
+fn handleRequest(s: *Server, conn: std.net.Server.Connection) void {
     defer conn.stream.close();
 
     var read_buffer: [8192]u8 = undefined;
@@ -80,18 +48,13 @@ fn handleRequest(s: *Server, conn: std.net.Server.Connection) !void {
 
     var http_server = std.http.Server.init(reader, writer);
 
-    // Support keep-alive for HTTP/1.1
-    while (true) {
-        var req = http_server.receiveHead() catch |err| {
-            if (err == error.EndOfStream) break; // Connection closed by client
-            return err;
-        };
+    var req = http_server.receiveHead() catch |err| {
+        std.log.debug("Failed to receive http head: {}", .{err});
+        return;
+    };
 
-        try s.handler.vtable.handle(s.handler, &req);
-
-        // Drop connection if keep alive is not requested
-        if (!req.head.keep_alive) {
-            break;
-        }
-    }
+    s.handler.vtable.handle(s.handler, &req) catch |err| {
+        std.log.debug("Failed to handle request for {s}: {}", .{ req.head.target, err });
+        return;
+    };
 }
