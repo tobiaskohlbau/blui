@@ -16,6 +16,8 @@
 	async function chamber_led(on: bool) {
 		await fetch(`/api/printer/led/chamber?state=${on ? "on" : "off"}`);
 	}
+
+	const decimals = 1;
 </script>
 
 <div class="grid">
@@ -36,15 +38,15 @@
 					<div class="temp-box">
 						<div class="temp-icon">🔥</div>
 						<div>
-							<div class="temp-val">{Number(data.nozzle_temperature).toFixed(2)} °C</div>
-							<div class="temp-meta">Nozzle / Target: <span>—</span></div>
+							<div class="temp-val">{Number(data.temperature.nozzle).toFixed(decimals)} °C</div>
+							<div class="temp-meta">Nozzle / Target: <span>{Number(data.temperature.nozzle_target).toFixed(decimals)}</span></div>
 						</div>
 					</div>
 					<div class="temp-box">
 						<div class="temp-icon">🛏️</div>
 						<div>
-							<div class="temp-val">{Number(data.bed_temperature).toFixed(2)} °C</div>
-							<div class="temp-meta">Bed / Target: <span>—</span></div>
+							<div class="temp-val">{Number(data.temperature.bed).toFixed(decimals)} °C</div>
+							<div class="temp-meta">Bed / Target: <span>{Number(data.temperature.bed_target).toFixed(decimals)}</span></div>
 						</div>
 					</div>
 				</div>
@@ -53,15 +55,15 @@
 					<div class="temp-box">
 						<div class="temp-icon">⚙️</div>
 						<div>
-							<div class="temp-val">— %</div>
+							<div class="temp-val">{data.fan.cooling_speed} %</div>
 							<div class="temp-meta">Fan speed</div>
 						</div>
 					</div>
 					<div class="temp-box">
-						<div class="temp-icon">⏱️</div>
+						<div class="temp-icon">⏳</div>
 						<div>
-							<div class="temp-val">—</div>
-							<div class="temp-meta">Print time</div>
+							<div class="temp-val">{data.print_percent} %</div>
+							<div class="temp-meta">Print progress</div>
 						</div>
 					</div>
 				</div>

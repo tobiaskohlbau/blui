@@ -16,8 +16,7 @@ export const load: PageLoad = async ({ params, fetch }) => {
 		);
 
 	return {
-		nozzle_temperature: status.temperature.nozzle,
-		bed_temperature: status.temperature.bed,
+		...status,
 		image: image
 	};
 };
