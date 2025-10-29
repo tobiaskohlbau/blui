@@ -14,19 +14,19 @@
 	});
 
 	async function chamber_led(on: bool) {
-		await fetch(`/api/printer/led/chamber?state=${on ? "on" : "off"}`);
+		await fetch(`/api/printer/led/chamber?state=${on ? 'on' : 'off'}`);
 	}
 
 	async function pause() {
-		await fetch("/api/printer/pause");
+		await fetch('/api/printer/pause');
 	}
 
 	async function resume() {
-		await fetch("/api/printer/resume");
+		await fetch('/api/printer/resume');
 	}
 
 	async function stop() {
-		await fetch("/api/printer/stop");
+		await fetch('/api/printer/stop');
 	}
 
 	const decimals = 1;
@@ -51,14 +51,20 @@
 						<div class="temp-icon">🔥</div>
 						<div>
 							<div class="temp-val">{Number(data.temperature.nozzle).toFixed(decimals)} °C</div>
-							<div class="temp-meta">Nozzle / Target: <span>{Number(data.temperature.nozzle_target).toFixed(decimals)}</span></div>
+							<div class="temp-meta">
+								Nozzle / Target: <span
+									>{Number(data.temperature.nozzle_target).toFixed(decimals)}</span
+								>
+							</div>
 						</div>
 					</div>
 					<div class="temp-box">
 						<div class="temp-icon">🛏️</div>
 						<div>
 							<div class="temp-val">{Number(data.temperature.bed).toFixed(decimals)} °C</div>
-							<div class="temp-meta">Bed / Target: <span>{Number(data.temperature.bed_target).toFixed(decimals)}</span></div>
+							<div class="temp-meta">
+								Bed / Target: <span>{Number(data.temperature.bed_target).toFixed(decimals)}</span>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -87,11 +93,11 @@
 		<div class="card">
 			<h2>Job Controls</h2>
 			<div class="controls">
-				<button class="btn primary" onclick={() => pause()}>Pause</button>
-				<button class="btn primary" onclick={() => resume()}>Resume</button>
-				<button class="btn warn" onclick={() => stop()}>Stop</button>
-				<button class="btn primary" onclick={() => chamber_led(true)}>LED On</button>
-				<button class="btn primary" onclick={() => chamber_led(false)}>LED Off</button>
+				<button class="btn" onclick={() => pause()}>Pause</button>
+				<button class="btn" onclick={() => resume()}>Resume</button>
+				<button class="btn" onclick={() => stop()}>Stop</button>
+				<button class="btn" onclick={() => chamber_led(true)}>LED On</button>
+				<button class="btn" onclick={() => chamber_led(false)}>LED Off</button>
 			</div>
 		</div>
 	</aside>
@@ -166,24 +172,5 @@
 	.controls {
 		display: flex;
 		gap: 10px;
-	}
-
-	.btn {
-		padding: 10px 14px;
-		border-radius: 10px;
-		background: linear-gradient(180deg, #0c1220, #061019);
-		border: 1px solid rgba(255, 255, 255, 0.03);
-		cursor: pointer;
-	}
-
-	.btn.primary {
-		background: linear-gradient(180deg, var(--accent), var(--accent-2));
-		color: #04203a;
-		font-weight: 600;
-	}
-
-	.btn.warn {
-		background: linear-gradient(180deg, #facc15, #fb7185);
-		color: #021124;
 	}
 </style>
