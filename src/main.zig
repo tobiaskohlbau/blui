@@ -218,6 +218,9 @@ fn handleHttp(allocator: std.mem.Allocator, printer_status: *printer.Status, mqt
     try api_router.register(allocator, "/version", routes.API.version);
     try api_router.register(allocator, "/printer/status", routes.API.printerStatus);
     try api_router.register(allocator, "/printer/led/chamber", routes.API.printerLedChamber);
+    try api_router.register(allocator, "/printer/pause", routes.API.printerPause);
+    try api_router.register(allocator, "/printer/resume", routes.API.printerResume);
+    try api_router.register(allocator, "/printer/stop", routes.API.printerStop);
     // only handle post requests
     try api_router.register(allocator, "/files/local", routes.API.uploadFile);
     try api_router.register(allocator, "/webcam.jpg", routes.API.webcam);

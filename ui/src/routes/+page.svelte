@@ -17,6 +17,18 @@
 		await fetch(`/api/printer/led/chamber?state=${on ? "on" : "off"}`);
 	}
 
+	async function pause() {
+		await fetch("/api/printer/pause");
+	}
+
+	async function resume() {
+		await fetch("/api/printer/resume");
+	}
+
+	async function stop() {
+		await fetch("/api/printer/stop");
+	}
+
 	const decimals = 1;
 </script>
 
@@ -75,8 +87,9 @@
 		<div class="card">
 			<h2>Job Controls</h2>
 			<div class="controls">
-				<button class="btn primary">Pause</button>
-				<button class="btn warn">Cancel</button>
+				<button class="btn primary" onclick={() => pause()}>Pause</button>
+				<button class="btn primary" onclick={() => resume()}>Resume</button>
+				<button class="btn warn" onclick={() => stop()}>Stop</button>
 				<button class="btn primary" onclick={() => chamber_led(true)}>LED On</button>
 				<button class="btn primary" onclick={() => chamber_led(false)}>LED Off</button>
 			</div>
