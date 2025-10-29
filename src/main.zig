@@ -118,20 +118,23 @@ pub fn main() !void {
         return;
     }
 
-    const message =
-        \\{"pushing": {"sequence_id": "0", "command": "pushall"}}
-    ;
-    var topic_buffer: [1024]u8 = undefined;
-    _ = try mqtt_conn.publish(.{ .topic = try std.fmt.bufPrint(&topic_buffer, "device/{s}/request", .{config.serial}), .message = message });
-
     var printer_status: printer.Status = .{
         .temperature = .{
             .nozzle = 0.0,
+            .nozzle_target = 0.0,
             .bed = 0.0,
+            .bed_target = 0.0,
         },
+        .fan = .{
+            .cooling_speed = 0.0,
+            .case_speed = 0.0,
+            .filter_speed = 0.0,
+        },
+        .print_percent = 0.0,
         .image = &.{},
     };
 
+    var topic_buffer: [1024]u8 = undefined;
     {
         const packet_identifier = try mqtt_conn.subscribe(.{ .topics = &.{.{ .filter = try std.fmt.bufPrint(&topic_buffer, "device/{s}/report", .{config.serial}), .qos = .at_most_once }} });
         if (mqtt_conn.readPacket()) |packet| switch (packet) {
@@ -149,6 +152,13 @@ pub fn main() !void {
             std.debug.print("Failed to read package after subscribing: {}\n", .{err});
             return;
         }
+    }
+
+    {
+        const message =
+            \\{"pushing": {"sequence_id": "0", "command": "pushall"}}
+        ;
+        _ = try mqtt_conn.publish(.{ .topic = try std.fmt.bufPrint(&topic_buffer, "device/{s}/request", .{config.serial}), .message = message });
     }
 
     const mqtt_thread = try std.Thread.spawn(.{}, handleMqtt, .{ allocator, mqtt_conn, &printer_status });
@@ -226,7 +236,17 @@ fn handleHttp(allocator: std.mem.Allocator, printer_status: *printer.Status, mqt
 }
 
 fn handleMqtt(allocator: std.mem.Allocator, conn: *mqtt.Client.Connection, printer_status: *printer.Status) !void {
-    const Print = struct { command: []const u8, nozzle_temper: ?f64 = null, bed_temper: ?f64 = null, nozzle_target_temper: ?f64 = null };
+    const Print = struct {
+        command: []const u8,
+        nozzle_temper: ?f64 = null,
+        nozzle_target_temper: ?f64 = null,
+        bed_temper: ?f64 = null,
+        bed_target_temper: ?f64 = null,
+        cooling_fan_speed: ?f64 = null,
+        big_fan1_speed: ?f64 = null,
+        big_fan2_speed: ?f64 = null,
+        mc_percent: ?f64 = null,
+    };
     const System = struct { command: []const u8 };
     const MqttMessage = union(enum) {
         print: Print,
@@ -248,8 +268,23 @@ fn handleMqtt(allocator: std.mem.Allocator, conn: *mqtt.Client.Connection, print
                             if (print.bed_temper) |t| {
                                 printer_status.temperature.bed = t;
                             }
+                            if (print.bed_target_temper) |t| {
+                                printer_status.temperature.bed_target = t;
+                            }
                             if (print.nozzle_temper) |t| {
                                 printer_status.temperature.nozzle = t;
+                            }
+                            if (print.nozzle_target_temper) |t| {
+                                printer_status.temperature.nozzle_target = t;
+                            }
+                            if (print.cooling_fan_speed) |s| {
+                                printer_status.fan.cooling_speed = s;
+                            }
+                            if (print.big_fan1_speed) |s| {
+                                printer_status.fan.case_speed = s;
+                            }
+                            if (print.big_fan2_speed) |s| {
+                                printer_status.fan.filter_speed = s;
                             }
                         }
                     },
