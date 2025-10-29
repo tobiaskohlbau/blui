@@ -19,7 +19,7 @@
 		</div>
 
 		<nav class="nav">
-			<a href="#" class="active">Dashboard</a>
+			<a href="/" class="active">Dashboard</a>
 		</nav>
 	</aside>
 
