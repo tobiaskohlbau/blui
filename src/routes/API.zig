@@ -58,6 +58,60 @@ pub fn printerStatus(self: *Self, req: *std.http.Server.Request) !void {
     });
 }
 
+pub fn printerPause(self: *Self, req: *std.http.Server.Request) !void {
+    const message = .{
+        .print = .{
+            .sequence_id = "0",
+            .command = "pause",
+        },
+    };
+
+    var json_buffer: [8192]u8 = undefined;
+    var fixed_writer = std.Io.Writer.fixed(&json_buffer);
+    try std.json.fmt(message, .{}).format(&fixed_writer);
+
+    var topic_buffer: [1024]u8 = undefined;
+    _ = try self.mqtt_conn.publish(.{ .topic = try std.fmt.bufPrint(&topic_buffer, "device/{s}/request", .{self.config.serial}), .message = fixed_writer.buffered() });
+
+    try req.respond("ok", .{ .status = std.http.Status.ok });
+}
+
+pub fn printerResume(self: *Self, req: *std.http.Server.Request) !void {
+    const message = .{
+        .print = .{
+            .sequence_id = "0",
+            .command = "resume",
+        },
+    };
+
+    var json_buffer: [8192]u8 = undefined;
+    var fixed_writer = std.Io.Writer.fixed(&json_buffer);
+    try std.json.fmt(message, .{}).format(&fixed_writer);
+
+    var topic_buffer: [1024]u8 = undefined;
+    _ = try self.mqtt_conn.publish(.{ .topic = try std.fmt.bufPrint(&topic_buffer, "device/{s}/request", .{self.config.serial}), .message = fixed_writer.buffered() });
+
+    try req.respond("ok", .{ .status = std.http.Status.ok });
+}
+
+pub fn printerStop(self: *Self, req: *std.http.Server.Request) !void {
+    const message = .{
+        .print = .{
+            .sequence_id = "0",
+            .command = "stop",
+        },
+    };
+
+    var json_buffer: [8192]u8 = undefined;
+    var fixed_writer = std.Io.Writer.fixed(&json_buffer);
+    try std.json.fmt(message, .{}).format(&fixed_writer);
+
+    var topic_buffer: [1024]u8 = undefined;
+    _ = try self.mqtt_conn.publish(.{ .topic = try std.fmt.bufPrint(&topic_buffer, "device/{s}/request", .{self.config.serial}), .message = fixed_writer.buffered() });
+
+    try req.respond("ok", .{ .status = std.http.Status.ok });
+}
+
 pub fn printerLedChamber(self: *Self, req: *std.http.Server.Request) !void {
     const pos = std.mem.findScalarPos(u8, req.head.target, 0, '?');
     if (pos == null) {
