@@ -21,6 +21,14 @@ blUI is in early development. Bugs are expected. Use at your own risk.
 
 ---
 
+## 📸 Demo
+
+https://github.com/user-attachments/assets/2cfcd3c9-057d-406a-861b-8582602088bc
+
+*This screencast demonstrates blUI integrated with OrcaSlicer, showcasing the upload, management, and monitoring of print jobs.*
+
+---
+
 ## 🧰 Installation and usage
 
 ### Using pre-built binaries (recommended)
