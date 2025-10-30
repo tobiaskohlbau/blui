@@ -131,6 +131,7 @@ pub fn main() !void {
             .filter_speed = 0.0,
         },
         .print_percent = 0.0,
+        .print_remaining_time = 0.0,
         .image = &.{},
     };
 
@@ -249,6 +250,7 @@ fn handleMqtt(allocator: std.mem.Allocator, conn: *mqtt.Client.Connection, print
         big_fan1_speed: ?f64 = null,
         big_fan2_speed: ?f64 = null,
         mc_percent: ?f64 = null,
+        mc_remaining_time: ?f64 = null,
     };
     const System = struct { command: []const u8 };
     const MqttMessage = union(enum) {
@@ -288,6 +290,12 @@ fn handleMqtt(allocator: std.mem.Allocator, conn: *mqtt.Client.Connection, print
                             }
                             if (print.big_fan2_speed) |s| {
                                 printer_status.fan.filter_speed = s;
+                            }
+                            if (print.mc_percent) |p| {
+                                printer_status.print_percent = p;
+                            }
+                            if (print.mc_remaining_time) |r| {
+                                printer_status.print_remaining_time = r;
                             }
                         }
                     },

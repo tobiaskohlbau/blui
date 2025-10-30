@@ -43,10 +43,12 @@ pub fn printerStatus(self: *Self, req: *std.http.Server.Request) !void {
         temperature: printer.Status.Temperature,
         fan: printer.Status.Fan,
         print_percent: f64,
+        print_remaining_time: f64,
     }{
         .temperature = self.printer_status.temperature,
         .fan = self.printer_status.fan,
         .print_percent = self.printer_status.print_percent,
+        .print_remaining_time = self.printer_status.print_remaining_time,
     };
 
     try std.json.fmt(response, .{
