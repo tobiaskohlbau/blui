@@ -110,6 +110,22 @@
 		gap: 18px;
 	}
 
+	@media (max-width: 768px) {
+		.grid {
+			grid-template-columns: 1fr;
+			gap: 14px;
+		}
+		.temp-row {
+			flex-direction: column;
+		}
+		.controls {
+			flex-direction: column;
+		}
+		.btn {
+			min-height: 44px;
+		}
+	}
+
 	.card {
 		background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
 		padding: 14px;
