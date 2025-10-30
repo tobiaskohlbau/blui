@@ -4,6 +4,7 @@
 
 	let { children } = $props();
 	let theme = $state(undefined);
+	let sidebarOpen = $state(false);
 
 	onMount(() => {
 		theme = localStorage.getItem('theme') || 'os';
@@ -32,13 +33,14 @@
 </svelte:head>
 
 <div class="app">
-	<aside class="sidebar">
+	<aside class="sidebar" class:open={sidebarOpen}>
 		<div class="brand">
 			<div class="logo">blUI</div>
 			<div>
 				<h1>blUI</h1>
 				<div class="small">Cloudless by Design</div>
 			</div>
+			<button class="hamburger" onclick={() => (sidebarOpen = false)}>✕</button>
 		</div>
 
 		<nav class="nav">
@@ -56,6 +58,11 @@
 	</aside>
 
 	<main class="main">
+		<header class="mobile-header">
+			{#if !sidebarOpen}
+				<button class="hamburger-open" onclick={() => (sidebarOpen = true)}> ☰ </button>
+			{/if}
+		</header>
 		{@render children?.()}
 	</main>
 </div>
@@ -66,14 +73,6 @@
 			box-sizing: border-box;
 		}
 
-		html,
-		body {
-			height: 100%;
-			margin: 0;
-			background: linear-gradient(180deg, var(--bg) 0%, var(--bg) 100%);
-			color: var(--muted);
-		}
-
 		a {
 			color: var(--accent-2);
 			text-decoration: none;
@@ -82,6 +81,7 @@
 		:root {
 			/* Light theme */
 			--bg-light: #ffffff;
+			--bg-tinted-light: oklch(from var(--bg-light) calc(l * 0.98) c h);
 			--card-light: #f8fafc;
 			--muted-light: #64748b;
 			--accent-light: #10b981;
@@ -91,6 +91,7 @@
 
 			/* Dark theme */
 			--bg-dark: #0f1724;
+			--bg-tinted-dark: oklch(from var(--bg-dark) calc(l * 1.2) c h);
 			--card-dark: #0b1220;
 			--muted-dark: #98a0b3;
 			--accent-dark: #58b892;
@@ -98,14 +99,14 @@
 			--glass-dark: rgba(255, 255, 255, 0.04);
 			--shadow-dark: 0 6px 18px rgba(2, 6, 23, 0.6);
 
-			/* Default to dark */
-			--bg: var(--bg-dark);
-			--card: var(--card-dark);
-			--muted: var(--muted-dark);
-			--accent: var(--accent-dark);
-			--accent-2: var(--accent-2-dark);
-			--glass: var(--glass-dark);
-			--shadow: var(--shadow-dark);
+			/* Default to light */
+			--bg: var(--bg-light);
+			--card: var(--card-light);
+			--muted: var(--muted-light);
+			--accent: var(--accent-light);
+			--accent-2: var(--accent-2-light);
+			--glass: var(--glass-light);
+			--shadow: var(--shadow-light);
 
 			--radius: 14px;
 			font-family:
@@ -117,22 +118,27 @@
 				Roboto,
 				'Helvetica Neue',
 				Arial;
+
+			color-scheme: light;
 		}
 
-		@media (prefers-color-scheme: light) {
+		@media (prefers-color-scheme: dark) {
 			:root {
-				--bg: var(--bg-light);
-				--card: var(--card-light);
-				--muted: var(--muted-light);
-				--accent: var(--accent-light);
-				--accent-2: var(--accent-2-light);
-				--glass: var(--glass-light);
-				--shadow: var(--shadow-light);
+				--bg: var(--bg-dark);
+				--bg-tinted: var(--bg-tinted-dark);
+				--card: var(--card-dark);
+				--muted: var(--muted-dark);
+				--accent: var(--accent-dark);
+				--accent-2: var(--accent-2-dark);
+				--glass: var(--glass-dark);
+				--shadow: var(--shadow-dark);
+				color-scheme: dark;
 			}
 		}
 
 		:root.light {
 			--bg: var(--bg-light);
+			--bg-tinted: var(--bg-tinted-light);
 			--card: var(--card-light);
 			--muted: var(--muted-light);
 			--accent: var(--accent-light);
@@ -143,12 +149,22 @@
 
 		:root.dark {
 			--bg: var(--bg-dark);
+			--bg-tinted: var(--bg-tinted-dark);
 			--card: var(--card-dark);
 			--muted: var(--muted-dark);
 			--accent: var(--accent-dark);
 			--accent-2: var(--accent-2-dark);
 			--glass: var(--glass-dark);
 			--shadow: var(--shadow-dark);
+		}
+
+		body {
+			margin: 0;
+			background: var(--bg);
+			color: var(--muted);
+			transition:
+				background-color 0.3s ease,
+				color 0.3s ease;
 		}
 
 		.btn {
@@ -181,18 +197,59 @@
 	}
 
 	.sidebar {
-		background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.015));
+		background: var(--card);
 		padding: 18px;
 		border-radius: 16px;
-		box-shadow: var(--shadow);
 		display: flex;
 		flex-direction: column;
-		min-height: calc(100vh - 56px);
+		min-height: calc(100vh-56px);
+	}
+
+	.main {
+		padding: 18px;
+		border-radius: 16px;
+		background: var(--card);
+	}
+
+	.mobile-header {
+		display: none;
+		height: 50px;
+		align-items: center;
+		margin-bottom: 10px;
+	}
+
+	@media (max-width: 768px) {
+		.app {
+			grid-template-columns: 1fr;
+			padding: 0px;
+		}
+
+		.main {
+			width: 100%;
+			border-radius: 0;
+			background: var(--bg);
+		}
+
+		.sidebar {
+			position: fixed;
+			top: -100vh;
+			height: calc(100vh - 28px);
+			width: 100%;
+			border-radius: 0;
+			z-index: 1000;
+			transition: top 0.3s ease;
+			background: var(--bg);
+
+			&.open {
+				top: 0;
+			}
+		}
 	}
 
 	.brand {
 		display: flex;
 		align-items: center;
+		justify-content: space-between;
 		gap: 12px;
 		margin-bottom: 10px;
 
@@ -248,10 +305,47 @@
 		color: white;
 	}
 
-	.main {
-		padding: 18px;
-		border-radius: 16px;
-		background: linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0.005));
-		box-shadow: var(--shadow);
+	.hamburger {
+		display: none;
+		background: var(--glass);
+		border: none;
+		padding: 8px;
+		border-radius: 8px;
+		cursor: pointer;
+		font-size: 18px;
+		color: var(--muted);
+		transition: background 0.2s;
+		&:hover {
+			background: var(--accent);
+			color: white;
+		}
+	}
+
+	.hamburger-open {
+		display: none;
+		background: var(--glass);
+		border: none;
+		padding: 10px;
+		border-radius: 8px;
+		cursor: pointer;
+		font-size: 20px;
+		color: var(--muted);
+		transition: background 0.2s;
+		&:hover {
+			background: var(--accent);
+			color: white;
+		}
+	}
+
+	@media (max-width: 768px) {
+		.mobile-header {
+			display: flex;
+		}
+		.hamburger {
+			display: block;
+		}
+		.hamburger-open {
+			display: block;
+		}
 	}
 </style>
