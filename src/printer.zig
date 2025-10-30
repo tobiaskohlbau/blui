@@ -15,5 +15,6 @@ pub const Status = struct {
     temperature: Temperature,
     fan: Fan,
     print_percent: f64,
+    print_remaining_time: f64,
     image: []u8,
 };
