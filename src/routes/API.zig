@@ -10,6 +10,7 @@ const Config = @import("../Config.zig");
 const Self = @This();
 
 allocator: std.mem.Allocator,
+io: std.Io,
 mqtt_conn: *mqtt.Client.Connection,
 config: *Config,
 printer_status: *printer.Status,
@@ -195,7 +196,7 @@ pub fn uploadFile(self: *Self, req: *std.http.Server.Request) !void {
 
     const should_print = std.ascii.eqlIgnoreCase(form.getPart("print").?.data.?, "true");
 
-    var ftp_client = ftp.Client{ .allocator = self.allocator, .ca_bundle = self.config.ca_bundle };
+    var ftp_client = ftp.Client{ .allocator = self.allocator, .io = self.io, .ca_bundle = self.config.ca_bundle };
     const ftp_conn = try ftp_client.connect(self.config.ip, 990, .tls, .{
         .username = "bblp",
         .password = self.config.access_code,
@@ -205,7 +206,7 @@ pub fn uploadFile(self: *Self, req: *std.http.Server.Request) !void {
         ftp_conn.end() catch |err| {
             std.log.debug("failed to disconnect from ftp: {}", .{err});
         };
-        ftp_conn.destroy();
+        ftp_conn.destroy(self.io);
     }
 
     try ftp_conn.uploadFile(filename, form_file.data.?);

@@ -1,17 +1,20 @@
 const std = @import("std");
-const net = std.net;
+const net = std.Io.net;
 const assert = std.debug.assert;
 
-const Writer = std.Io.Writer;
-const Reader = std.Io.Reader;
+const Io = std.Io;
+const Writer = Io.Writer;
+const Reader = Io.Reader;
 const Client = @This();
 
 allocator: std.mem.Allocator,
+io: Io,
 tls_buffer_size: usize = std.crypto.tls.Client.min_buffer_len,
 read_buffer_size: usize = 8192,
 write_buffer_size: usize = 1024,
 ssl_key_log: ?*std.crypto.tls.Client.SslKeyLog = null,
 ca_bundle: ?std.crypto.Certificate.Bundle = null,
+now: ?Io.Timestamp = null,
 
 const Packet = union(enum) {
     const ConnectReturnCode = enum(u8) {
@@ -97,8 +100,8 @@ pub const Connection = struct {
             plain.* = .{
                 .connection = .{
                     .client = client,
-                    .stream_writer = stream.writer(socket_write_buffer),
-                    .stream_reader = stream.reader(socket_read_buffer),
+                    .stream_writer = stream.writer(client.io, socket_write_buffer),
+                    .stream_reader = stream.reader(client.io, socket_read_buffer),
                     .port = port,
                     .host_len = @intCast(remote_host.len),
                     .protocol = .plain,
@@ -137,17 +140,20 @@ pub const Connection = struct {
             assert(base.ptr + alloc_len == socket_read_buffer.ptr + socket_read_buffer.len);
             @memcpy(host_buffer, remote_host);
             const tls: *Tls = @ptrCast(base);
+            var random_buffer: [176]u8 = undefined;
+            std.crypto.random.bytes(&random_buffer);
+            const now = client.now orelse try Io.Clock.real.now(client.io);
             tls.* = .{
                 .connection = .{
                     .client = client,
-                    .stream_writer = stream.writer(tls_write_buffer),
-                    .stream_reader = stream.reader(socket_read_buffer),
+                    .stream_writer = stream.writer(client.io, tls_write_buffer),
+                    .stream_reader = stream.reader(client.io, socket_read_buffer),
                     .port = port,
                     .host_len = @intCast(remote_host.len),
                     .protocol = .tls,
                 },
                 .client = std.crypto.tls.Client.init(
-                    tls.connection.stream_reader.interface(),
+                    &tls.connection.stream_reader.interface,
                     &tls.connection.stream_writer.interface,
                     .{
                         .host = .no_verification,
@@ -155,6 +161,8 @@ pub const Connection = struct {
                         .ssl_key_log = client.ssl_key_log,
                         .read_buffer = tls_read_buffer,
                         .write_buffer = socket_write_buffer,
+                        .entropy = &random_buffer,
+                        .realtime_now_seconds = now.toSeconds(),
                     },
                 ) catch return error.TlsInitializationFailed,
             };
@@ -179,8 +187,8 @@ pub const Connection = struct {
         return c.stream_reader.getStream();
     }
 
-    pub fn destroy(c: *Connection) void {
-        c.getStream().close();
+    pub fn destroy(c: *Connection, io: Io) void {
+        c.getStream().close(io);
         switch (c.protocol) {
             .tls => {
                 const tls: *Tls = @alignCast(@fieldParentPtr("connection", c));
@@ -326,7 +334,7 @@ pub const Connection = struct {
                 const tls: *Tls = @alignCast(@fieldParentPtr("connection", c));
                 return &tls.client.reader;
             },
-            .plain => c.stream_reader.interface(),
+            .plain => &c.stream_reader.interface,
         };
     }
 
@@ -437,7 +445,8 @@ const Options = struct {
 };
 
 pub fn connect(client: *Client, host: []const u8, port: u16, protocol: Protocol, options: Options) !*Connection {
-    const stream = try std.net.tcpConnectToHost(client.allocator, host, port);
+    const host_name = try net.HostName.init(host);
+    const stream = try host_name.connect(client.io, port, .{ .mode = .stream, .protocol = .tcp });
     const conn = switch (protocol) {
         .tls => blk: {
             const conn = try Connection.Tls.create(client, host, port, stream);

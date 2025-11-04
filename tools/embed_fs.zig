@@ -1,12 +1,26 @@
 const std = @import("std");
+const builtin = @import("builtin");
+
+var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 
 pub fn main() !void {
-    var arena_state = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena_state.deinit();
-    const arena = arena_state.allocator();
+    const gpa, const is_debug = gpa: {
+        if (builtin.os.tag == .wasi) break :gpa .{ std.heap.wasm_allocator, false };
+        break :gpa switch (builtin.mode) {
+            .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
+            .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, false },
+        };
+    };
+    defer if (is_debug) {
+        _ = debug_allocator.deinit();
+    };
 
-    const args = try std.process.argsAlloc(arena);
-    defer std.process.argsFree(arena, args);
+    var threaded = std.Io.Threaded.init(gpa);
+    defer threaded.deinit();
+    const threaded_io = threaded.io();
+
+    const args = try std.process.argsAlloc(gpa);
+    defer std.process.argsFree(gpa, args);
 
     if (args.len != 3) fatal("wrong number of arguments", .{});
 
@@ -31,7 +45,7 @@ pub fn main() !void {
         \\
     , .{});
 
-    var directory_walker = try input_dir.walk(arena);
+    var directory_walker = try input_dir.walk(gpa);
     defer directory_walker.deinit();
 
     while (try directory_walker.next()) |entry| {
@@ -39,8 +53,8 @@ pub fn main() !void {
             continue;
         }
 
-        const normalized_path = try std.mem.replaceOwned(u8, arena, entry.path, "\\", "/");
-        defer arena.free(normalized_path);
+        const normalized_path = try std.mem.replaceOwned(u8, gpa, entry.path, "\\", "/");
+        defer gpa.free(normalized_path);
 
         try output_writer.interface.print(
             \\  .{{ "{s}", @constCast(&[_]u8{{
@@ -48,7 +62,7 @@ pub fn main() !void {
         var f = try input_dir.openFile(entry.path, .{ .mode = .read_only });
         errdefer f.close();
 
-        var fr = f.reader(&in_buf);
+        var fr = f.reader(threaded_io, &in_buf);
         while (true) {
             const data = fr.interface.takeByte() catch |err| {
                 if (err == error.EndOfStream) {
