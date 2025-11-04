@@ -1,5 +1,6 @@
 const std = @import("std");
-const net = std.net;
+const net = std.Io.net;
+const Io = std.Io;
 
 const Options = struct {};
 
@@ -16,34 +17,37 @@ pub const Handler = struct {
 };
 
 allocator: std.mem.Allocator,
+io: Io,
 port: u16,
 handler: *Handler,
+shutdown: bool = false,
 
 pub fn stop(s: *Server) !void {
-    _ = s;
+    s.shutdown = true;
 }
 
 pub fn listen(s: *Server) !void {
-    const addr = try std.net.Address.parseIp("0.0.0.0", s.port);
-    var tcp_server = try addr.listen(.{
+    const addr = try net.IpAddress.parse("0.0.0.0", s.port);
+    var tcp_server = try addr.listen(s.io, .{
         .reuse_address = true,
     });
 
-    while (true) {
-        const conn = try tcp_server.accept();
-        const t = try std.Thread.spawn(.{}, handleRequest, .{ s, conn });
-        t.detach();
+    var group: std.Io.Group = .init;
+    while (!s.shutdown) {
+        const stream = try tcp_server.accept(s.io);
+        group.async(s.io, handleRequest, .{ s, stream });
     }
+    group.wait(s.io);
 }
 
-fn handleRequest(s: *Server, conn: std.net.Server.Connection) void {
-    defer conn.stream.close();
+fn handleRequest(s: *Server, stream: net.Stream) void {
+    defer stream.close(s.io);
 
     var read_buffer: [8192]u8 = undefined;
     var write_buffer: [8192]u8 = undefined;
-    var stream_reader = conn.stream.reader(&read_buffer);
-    var stream_writer = conn.stream.writer(&write_buffer);
-    const reader = stream_reader.interface();
+    var stream_reader = stream.reader(s.io, &read_buffer);
+    var stream_writer = stream.writer(s.io, &write_buffer);
+    const reader = &stream_reader.interface;
     const writer = &stream_writer.interface;
 
     var http_server = std.http.Server.init(reader, writer);

@@ -56,7 +56,7 @@ pub fn save(c: *Config, allocator: std.mem.Allocator) !void {
     try writer.interface.flush();
 }
 
-pub fn load(c: *Config, allocator: std.mem.Allocator) !void {
+pub fn load(c: *Config, allocator: std.mem.Allocator, io: std.Io) !void {
     const path = try getConfigPath(allocator);
     defer allocator.free(path);
 
@@ -71,7 +71,7 @@ pub fn load(c: *Config, allocator: std.mem.Allocator) !void {
     defer file.close();
 
     var buf: [8192]u8 = undefined;
-    var reader = file.reader(&buf);
+    var reader = file.reader(io, &buf);
 
     const stat = try file.stat();
     const data = try allocator.alloc(u8, stat.size + 1);

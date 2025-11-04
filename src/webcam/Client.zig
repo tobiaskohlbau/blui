@@ -1,17 +1,20 @@
 const std = @import("std");
-const net = std.net;
+const net = std.Io.net;
 const assert = std.debug.assert;
 
+const Io = std.Io;
 const Reader = std.Io.Reader;
 const Writer = std.Io.Writer;
 const Client = @This();
 
 allocator: std.mem.Allocator,
+io: Io,
 tls_buffer_size: usize = std.crypto.tls.Client.min_buffer_len,
 read_buffer_size: usize = 8192,
 write_buffer_size: usize = 1024,
 ssl_key_log: ?*std.crypto.tls.Client.SslKeyLog = null,
 ca_bundle: ?std.crypto.Certificate.Bundle = null,
+now: ?Io.Timestamp = null,
 
 const Connection = struct {
     client: *Client,
@@ -35,14 +38,17 @@ const Connection = struct {
         assert(base.ptr + alloc_len == socket_read_buffer.ptr + socket_read_buffer.len);
         @memcpy(host_buffer, remote_host);
         const connection: *Connection = @ptrCast(base);
+        var random_buffer: [176]u8 = undefined;
+        std.crypto.random.bytes(&random_buffer);
+        const now = client.now orelse try Io.Clock.real.now(client.io);
         connection.* = .{
             .client = client,
-            .stream_writer = stream.writer(tls_write_buffer),
-            .stream_reader = stream.reader(socket_read_buffer),
+            .stream_writer = stream.writer(client.io, tls_write_buffer),
+            .stream_reader = stream.reader(client.io, socket_read_buffer),
             .port = port,
             .host_len = @intCast(remote_host.len),
             .tls_client = std.crypto.tls.Client.init(
-                connection.stream_reader.interface(),
+                &connection.stream_reader.interface,
                 &connection.stream_writer.interface,
                 .{
                     .host = .no_verification,
@@ -50,6 +56,8 @@ const Connection = struct {
                     .ssl_key_log = client.ssl_key_log,
                     .read_buffer = tls_read_buffer,
                     .write_buffer = socket_write_buffer,
+                    .entropy = &random_buffer,
+                    .realtime_now_seconds = now.toSeconds(),
                 },
             ) catch return error.TlsInitializationFailed,
         };
@@ -117,7 +125,8 @@ const Options = struct {
 };
 
 pub fn connect(client: *Client, host: []const u8, port: u16, options: Options) !*Connection {
-    const stream = try std.net.tcpConnectToHost(client.allocator, host, port);
+    const host_name = try net.HostName.init(host);
+    const stream = try host_name.connect(client.io, port, .{ .mode = .stream, .protocol = .tcp });
     const conn = try Connection.create(client, host, port, stream);
     try conn.connect(options.username, options.password);
     return conn;

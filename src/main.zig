@@ -1,6 +1,7 @@
 const std = @import("std");
 var log_level = std.log.default_level;
 
+const builtin = @import("builtin");
 const webcam = @import("webcam/main.zig");
 const ftp = @import("ftp");
 const mqtt = @import("mqtt");
@@ -28,13 +29,28 @@ fn logFn(
     }
 }
 
+var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+
 pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
+    const gpa, const is_debug = gpa: {
+        if (builtin.os.tag == .wasi) break :gpa .{ std.heap.wasm_allocator, false };
+        break :gpa switch (builtin.mode) {
+            .Debug, .ReleaseSafe => .{ debug_allocator.allocator(), true },
+            .ReleaseFast, .ReleaseSmall => .{ std.heap.smp_allocator, false },
+        };
+    };
+    defer if (is_debug) {
+        _ = debug_allocator.deinit();
+    };
 
-    const allocator = arena.allocator();
+    var gpio = switch (builtin.os.tag) {
+        // currently only threaded is implemented in zig std
+        else => std.Io.Threaded.init(gpa),
+    };
+    defer gpio.deinit();
+    const io = gpio.io();
 
-    var args = try std.process.argsWithAllocator(allocator);
+    var args = try std.process.argsWithAllocator(gpa);
     defer args.deinit();
 
     var config: Config = .{
@@ -45,16 +61,16 @@ pub fn main() !void {
         .ca_bundle = null,
     };
 
-    try config.load(allocator);
+    try config.load(gpa, io);
 
     var debug = false;
 
     var flags = Flags.empty;
-    try flags.add(allocator, "dev", &config.dev, false);
-    try flags.add(allocator, "debug", &debug, false);
-    try flags.add(allocator, "accessCode", &config.access_code, false);
-    try flags.add(allocator, "ip", &config.ip, false);
-    try flags.add(allocator, "serial", &config.serial, false);
+    try flags.add(gpa, "dev", &config.dev, false);
+    try flags.add(gpa, "debug", &debug, false);
+    try flags.add(gpa, "accessCode", &config.access_code, false);
+    try flags.add(gpa, "ip", &config.ip, false);
+    try flags.add(gpa, "serial", &config.serial, false);
     try flags.parse(&args);
 
     // Check required fields
@@ -89,11 +105,13 @@ pub fn main() !void {
     };
 
     var bundle = std.crypto.Certificate.Bundle{};
-    try bundle.addCertsFromFilePath(allocator, std.fs.cwd(), cert_path);
+    try bundle.addCertsFromFilePath(gpa, io, try std.Io.Clock.real.now(io), std.Io.Dir.cwd(), cert_path);
     std.log.debug("Certificates in bundle: {d}\n", .{bundle.map.size});
-    var mqtt_client = mqtt.Client{ .allocator = allocator };
+
+    var mqtt_client = mqtt.Client{ .allocator = gpa, .io = io };
 
     var mqtt_conn = try mqtt_client.connect(config.ip, 8883, .tls, .{ .username = "bblp", .password = config.access_code, .client_id = "blUI", .keepalive_sec = 0 });
+    _ = &mqtt_conn;
 
     defer {
         mqtt_conn.disconnect() catch |err| {
@@ -162,18 +180,22 @@ pub fn main() !void {
         _ = try mqtt_conn.publish(.{ .topic = try std.fmt.bufPrint(&topic_buffer, "device/{s}/request", .{config.serial}), .message = message });
     }
 
-    const mqtt_thread = try std.Thread.spawn(.{}, handleMqtt, .{ allocator, mqtt_conn, &printer_status });
-    const http_thread = try std.Thread.spawn(.{}, handleHttp, .{ allocator, &printer_status, mqtt_conn, &config });
-    const webcam_thread = try std.Thread.spawn(.{}, handleWebcam, .{ allocator, &printer_status, &config });
+    const mqtt_thread = try std.Thread.spawn(.{}, handleMqtt, .{ gpa, mqtt_conn, &printer_status });
+    const http_thread = try std.Thread.spawn(.{}, handleHttp, .{ gpa, io, &printer_status, mqtt_conn, &config });
+    const webcam_thread = try std.Thread.spawn(.{}, handleWebcam, .{ gpa, io, &printer_status, &config });
 
     mqtt_thread.join();
     http_thread.join();
     webcam_thread.join();
 }
 
-fn handleWebcam(allocator: std.mem.Allocator, printer_status: *printer.Status, config: *Config) !void {
+fn handleWebcam(gpa: std.mem.Allocator, io: std.Io, printer_status: *printer.Status, config: *Config) !void {
     // var webcam_client = webcam.Client{ .allocator = allocator, .ca_bundle = config.ca_bundle };
-    var webcam_client = webcam.Client{ .allocator = allocator, .ca_bundle = null };
+    var webcam_client = webcam.Client{
+        .allocator = gpa,
+        .io = io,
+        .ca_bundle = null,
+    };
     const webcam_conn = try webcam_client.connect(config.ip, 6000, .{
         .username = "bblp",
         .password = config.access_code,
@@ -191,44 +213,44 @@ fn handleWebcam(allocator: std.mem.Allocator, printer_status: *printer.Status, c
 
     while (true) {
         const image_length = try reader.takeInt(u32, .little);
-        try img.resize(allocator, image_length);
+        try img.resize(gpa, image_length);
         try reader.discardAll(3 * 4);
         try reader.readSliceAll(img.items);
-        printer_status.image = try img.toOwnedSlice(allocator);
+        printer_status.image = try img.toOwnedSlice(gpa);
     }
 }
 
-fn handleHttp(allocator: std.mem.Allocator, printer_status: *printer.Status, mqtt_conn: *mqtt.Client.Connection, config: *Config) !void {
+fn handleHttp(gpa: std.mem.Allocator, io: std.Io, printer_status: *printer.Status, mqtt_conn: *mqtt.Client.Connection, config: *Config) !void {
     const HttpServer = http.Server;
     var ui: routes.UI = .{
-        .allocator = allocator,
+        .allocator = gpa,
     };
 
     var ui_router: http.Router(routes.UI) = .{
         .context = &ui,
         .not_found_handle_fn = routes.UI.notFound,
     };
-    defer ui_router.deinit(allocator);
+    defer ui_router.deinit(gpa);
 
-    var api: routes.API = .{ .allocator = allocator, .printer_status = printer_status, .mqtt_conn = mqtt_conn, .config = config };
+    var api: routes.API = .{ .allocator = gpa, .io = io, .printer_status = printer_status, .mqtt_conn = mqtt_conn, .config = config };
     var api_router: http.Router(routes.API) = .{
         .context = &api,
     };
-    defer api_router.deinit(allocator);
+    defer api_router.deinit(gpa);
 
-    try api_router.register(allocator, "/version", routes.API.version);
-    try api_router.register(allocator, "/printer/status", routes.API.printerStatus);
-    try api_router.register(allocator, "/printer/led/chamber", routes.API.printerLedChamber);
-    try api_router.register(allocator, "/printer/pause", routes.API.printerPause);
-    try api_router.register(allocator, "/printer/resume", routes.API.printerResume);
-    try api_router.register(allocator, "/printer/stop", routes.API.printerStop);
+    try api_router.register(gpa, "/version", routes.API.version);
+    try api_router.register(gpa, "/printer/status", routes.API.printerStatus);
+    try api_router.register(gpa, "/printer/led/chamber", routes.API.printerLedChamber);
+    try api_router.register(gpa, "/printer/pause", routes.API.printerPause);
+    try api_router.register(gpa, "/printer/resume", routes.API.printerResume);
+    try api_router.register(gpa, "/printer/stop", routes.API.printerStop);
     // only handle post requests
-    try api_router.register(allocator, "/files/local", routes.API.uploadFile);
-    try api_router.register(allocator, "/webcam.jpg", routes.API.webcam);
+    try api_router.register(gpa, "/files/local", routes.API.uploadFile);
+    try api_router.register(gpa, "/webcam.jpg", routes.API.webcam);
 
-    try ui_router.registerSubRouter(allocator, "/api", &api_router.serverHandler);
+    try ui_router.registerSubRouter(gpa, "/api", &api_router.serverHandler);
 
-    var server = HttpServer{ .allocator = allocator, .port = 3080, .handler = &ui_router.serverHandler };
+    var server = HttpServer{ .allocator = gpa, .io = io, .port = 3080, .handler = &ui_router.serverHandler };
     defer {
         server.stop() catch |err| {
             std.log.debug("failed to stop http server: {}", .{err});
@@ -239,7 +261,7 @@ fn handleHttp(allocator: std.mem.Allocator, printer_status: *printer.Status, mqt
     try server.listen();
 }
 
-fn handleMqtt(allocator: std.mem.Allocator, conn: *mqtt.Client.Connection, printer_status: *printer.Status) !void {
+fn handleMqtt(gpa: std.mem.Allocator, conn: *mqtt.Client.Connection, printer_status: *printer.Status) !void {
     const Print = struct {
         command: []const u8,
         nozzle_temper: ?f64 = null,
@@ -263,7 +285,7 @@ fn handleMqtt(allocator: std.mem.Allocator, conn: *mqtt.Client.Connection, print
         switch (packet) {
             .publish => |*publish| {
                 std.debug.print("topic: {s}\ndata: {s}\n\n", .{ publish.topic, publish.message });
-                const parsed_msg = try std.json.parseFromSlice(MqttMessage, allocator, publish.message, .{
+                const parsed_msg = try std.json.parseFromSlice(MqttMessage, gpa, publish.message, .{
                     .ignore_unknown_fields = true,
                 });
                 const msg = parsed_msg.value;

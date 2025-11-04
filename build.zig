@@ -69,7 +69,7 @@ const UiBuildStep = struct {
         defer build_man.deinit();
 
         // Add ui sources to manifest
-        var dir = try b.build_root.handle.openDir(ui_dir, .{ .iterate = true, .no_follow = true });
+        var dir = try b.build_root.handle.openDir(ui_dir, .{ .iterate = true, .follow_symlinks = false });
 
         var walker = try dir.walk(b.allocator);
         while (try walker.next()) |entry| {
