@@ -116,25 +116,14 @@ pub fn printerStop(self: *Self, req: *std.http.Server.Request) !void {
 }
 
 pub fn printerLedChamber(self: *Self, req: *std.http.Server.Request) !void {
-    const pos = std.mem.findScalarPos(u8, req.head.target, 0, '?');
-    if (pos == null) {
-        try req.respond("bad request", .{ .status = std.http.Status.bad_request });
+    var url: http.URL = .empty;
+    url.parseFromPath(req.head.target) catch |err| {
+        std.log.err("failed to parse request url: {}", .{err});
+        try req.respond("internal server error", .{ .status = std.http.Status.internal_server_error });
         return;
-    }
-    var queries = std.mem.splitScalar(u8, req.head.target[pos.? + 1 .. req.head.target.len], '&');
-    const request_state: []const u8 = blk: {
-        while (queries.next()) |query| {
-            var items = std.mem.splitScalar(u8, query, '=');
-            if (items.next()) |key| {
-                std.log.debug("query key: {s}", .{key});
-                if (std.mem.eql(u8, key, "state")) {
-                    break :blk items.next().?;
-                }
-            }
-        }
-        break :blk "";
     };
 
+    const request_state = url.queryByName("state") orelse "";
     const state = if (std.mem.eql(u8, request_state, "on")) "on" else "off";
     const message = .{ .system = .{ .sequence_id = "0", .command = "ledctrl", .led_node = "chamber_light", .led_mode = state, .led_on_time = 500, .led_off_time = 500, .loop_times = 0, .interval_time = 0 } };
 
@@ -144,6 +133,45 @@ pub fn printerLedChamber(self: *Self, req: *std.http.Server.Request) !void {
 
     var topic_buffer: [1024]u8 = undefined;
     _ = try self.mqtt_conn.publish(.{ .topic = try std.fmt.bufPrint(&topic_buffer, "device/{s}/request", .{self.config.serial}), .message = fixed_writer.buffered() });
+
+    try req.respond("ok", .{ .status = std.http.Status.ok });
+}
+
+pub fn printerCleanError(self: *Self, req: *std.http.Server.Request) !void {
+    var url: http.URL = .empty;
+    url.parseFromPath(req.head.target) catch |err| {
+        std.log.err("failed to parse request url: {}", .{err});
+        try req.respond("internal server error", .{ .status = std.http.Status.internal_server_error });
+        return;
+    };
+
+    const code = url.queryByName("code") orelse {
+        try req.respond("bad request", .{ .status = std.http.Status.bad_request });
+        return;
+    };
+    const id = url.queryByName("id") orelse {
+        try req.respond("bad request", .{ .status = std.http.Status.bad_request });
+        return;
+    };
+
+    const message = .{
+        .print = .{
+            .sequence_id = "0",
+            .command = "clean_print_error",
+            .print_error = code,
+            .subtask_id = id,
+        },
+    };
+
+    var json_buffer: [8192]u8 = undefined;
+    var fixed_writer = std.Io.Writer.fixed(&json_buffer);
+    try std.json.fmt(message, .{}).format(&fixed_writer);
+
+    var topic_buffer: [1024]u8 = undefined;
+    _ = try self.mqtt_conn.publish(.{
+        .topic = try std.fmt.bufPrint(&topic_buffer, "device/{s}/request", .{self.config.serial}),
+        .message = fixed_writer.buffered(),
+    });
 
     try req.respond("ok", .{ .status = std.http.Status.ok });
 }
