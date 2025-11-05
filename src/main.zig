@@ -244,6 +244,7 @@ fn handleHttp(gpa: std.mem.Allocator, io: std.Io, printer_status: *printer.Statu
     try api_router.register(gpa, "/printer/pause", routes.API.printerPause);
     try api_router.register(gpa, "/printer/resume", routes.API.printerResume);
     try api_router.register(gpa, "/printer/stop", routes.API.printerStop);
+    try api_router.register(gpa, "/printer/clean_error", routes.API.printerCleanError);
     // only handle post requests
     try api_router.register(gpa, "/files/local", routes.API.uploadFile);
     try api_router.register(gpa, "/webcam.jpg", routes.API.webcam);
