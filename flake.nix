@@ -18,7 +18,7 @@
     {
       devShells.default = pkgs.mkShell {
         packages = [
-          zigpkgs."master-2025-11-02"
+          zigpkgs."master-2025-11-24"
           unstable.zls
           pkgs.nodejs
           pkgs.pnpm
