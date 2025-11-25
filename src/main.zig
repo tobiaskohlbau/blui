@@ -323,12 +323,12 @@ fn handleMqtt(gpa: std.mem.Allocator, conn: *mqtt.Client.Connection, printer_sta
                         }
                     },
                     .system => |system| {
-                        std.debug.print("received system message: {}", .{system});
+                        std.log.info("received system message: {}", .{system});
                     },
                 }
             },
             else => {
-                std.debug.print("unexpected packet: {any}\n", .{packet});
+                std.log.err("unexpected packet: {any}\n", .{packet});
             },
         }
     }
