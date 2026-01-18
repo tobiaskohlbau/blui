@@ -31,7 +31,9 @@ fn logFn(
 
 var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 
-pub fn main() !void {
+const process = std.process;
+
+pub fn main(init: process.Init.Minimal) !void {
     const gpa, const is_debug = gpa: {
         if (builtin.os.tag == .wasi) break :gpa .{ std.heap.wasm_allocator, false };
         break :gpa switch (builtin.mode) {
@@ -45,13 +47,12 @@ pub fn main() !void {
 
     var gpio = switch (builtin.os.tag) {
         // currently only threaded is implemented in zig std
-        else => std.Io.Threaded.init(gpa),
+        else => std.Io.Threaded.init(gpa, .{
+            .environ = .empty,
+        }),
     };
     defer gpio.deinit();
     const io = gpio.io();
-
-    var args = try std.process.argsWithAllocator(gpa);
-    defer args.deinit();
 
     var config: Config = .{
         .dev = false,
@@ -61,7 +62,7 @@ pub fn main() !void {
         .ca_bundle = null,
     };
 
-    try config.load(gpa, io);
+    try config.load(gpa, io, init.environ);
 
     var debug = false;
 
@@ -71,7 +72,8 @@ pub fn main() !void {
     try flags.add(gpa, "accessCode", &config.access_code, false);
     try flags.add(gpa, "ip", &config.ip, false);
     try flags.add(gpa, "serial", &config.serial, false);
-    try flags.parse(&args);
+    try flags.parse(gpa, &init.args);
+    defer flags.deinit(gpa);
 
     // Check required fields
     if (config.access_code.len == 0) {
@@ -98,10 +100,10 @@ pub fn main() !void {
     const cert_path = "certificate.pem";
     const embedded_cert = @embedFile(cert_path);
 
-    std.fs.cwd().access(cert_path, .{}) catch {
-        const file = try std.fs.cwd().createFile(cert_path, .{});
-        defer file.close();
-        try file.writeAll(embedded_cert);
+    std.Io.Dir.cwd().access(io, cert_path, .{}) catch {
+        const file = try std.Io.Dir.cwd().createFile(io, cert_path, .{});
+        defer file.close(io);
+        try file.writeStreamingAll(io, embedded_cert);
     };
 
     var bundle = std.crypto.Certificate.Bundle{};

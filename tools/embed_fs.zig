@@ -3,7 +3,9 @@ const builtin = @import("builtin");
 
 var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
 
-pub fn main() !void {
+const process = std.process;
+
+pub fn main(init: process.Init.Minimal) !void {
     const gpa, const is_debug = gpa: {
         if (builtin.os.tag == .wasi) break :gpa .{ std.heap.wasm_allocator, false };
         break :gpa switch (builtin.mode) {
@@ -15,28 +17,30 @@ pub fn main() !void {
         _ = debug_allocator.deinit();
     };
 
-    var threaded = std.Io.Threaded.init(gpa);
+    var threaded: std.Io.Threaded = .init(gpa, .{
+        .environ = .empty,
+    });
     defer threaded.deinit();
-    const threaded_io = threaded.io();
+    const io = threaded.io();
 
-    const args = try std.process.argsAlloc(gpa);
-    defer std.process.argsFree(gpa, args);
+    const args = try init.args.toSlice(gpa);
+    defer gpa.free(args);
 
     if (args.len != 3) fatal("wrong number of arguments", .{});
 
     const input_folder_path = args[1];
     const output_file_path = args[2];
 
-    var output_file = std.fs.cwd().createFile(output_file_path, .{}) catch |err| {
+    var output_file = std.Io.Dir.cwd().createFile(io, output_file_path, .{}) catch |err| {
         fatal("unable to open '{s}': {s}", .{ output_file_path, @errorName(err) });
     };
-    defer output_file.close();
+    defer output_file.close(io);
 
-    const input_dir = try std.fs.openDirAbsolute(input_folder_path, .{ .iterate = true });
+    const input_dir = try std.Io.Dir.openDirAbsolute(io, input_folder_path, .{ .iterate = true });
 
     var out_buf: [8192]u8 = undefined;
     var in_buf: [8192]u8 = undefined;
-    var output_writer = output_file.writer(&out_buf);
+    var output_writer = output_file.writer(io, &out_buf);
 
     try output_writer.interface.print(
         \\const std = @import("std");
@@ -48,7 +52,7 @@ pub fn main() !void {
     var directory_walker = try input_dir.walk(gpa);
     defer directory_walker.deinit();
 
-    while (try directory_walker.next()) |entry| {
+    while (try directory_walker.next(io)) |entry| {
         if (entry.kind != .file) {
             continue;
         }
@@ -59,10 +63,10 @@ pub fn main() !void {
         try output_writer.interface.print(
             \\  .{{ "{s}", @constCast(&[_]u8{{
         , .{normalized_path});
-        var f = try input_dir.openFile(entry.path, .{ .mode = .read_only });
-        errdefer f.close();
+        var f = try input_dir.openFile(io, entry.path, .{ .mode = .read_only });
+        errdefer f.close(io);
 
-        var fr = f.reader(threaded_io, &in_buf);
+        var fr = f.reader(io, &in_buf);
         while (true) {
             const data = fr.interface.takeByte() catch |err| {
                 if (err == error.EndOfStream) {
@@ -74,7 +78,7 @@ pub fn main() !void {
         }
 
         _ = try fr.interface.streamRemaining(&output_writer.interface);
-        f.close();
+        f.close(io);
 
         try output_writer.interface.writeAll("}) },\n");
     }
@@ -85,7 +89,7 @@ pub fn main() !void {
     , .{});
 
     try output_writer.interface.flush();
-    return std.process.cleanExit();
+    return std.process.cleanExit(io);
 }
 
 fn fatal(comptime format: []const u8, args: anytype) noreturn {

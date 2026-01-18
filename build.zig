@@ -21,7 +21,9 @@ const UiBuildStep = struct {
     fn make(step: *std.Build.Step, _: std.Build.Step.MakeOptions) !void {
         const self: *UiBuildStep = @fieldParentPtr("step", step);
         const b = self.step.owner;
-        const allocator = b.allocator;
+
+        const graph = b.graph;
+        const io = graph.io;
 
         const ui_dir_path = self.ui_path.getPath3(b, step);
         const ui_dir = ui_dir_path.sub_path;
@@ -36,21 +38,32 @@ const UiBuildStep = struct {
 
         const install_cache_hit = try step.cacheHitAndWatch(&install_man);
         if (!install_cache_hit) {
-            var child = std.process.Child.init(&.{ "pnpm", "install" }, allocator);
-            child.cwd = ui_dir;
-            child.stdout_behavior = .Inherit;
-            child.stderr_behavior = .Inherit;
-            const term = try child.spawnAndWait();
-            if (term != .Exited or term.Exited != 0) {
-                return error.PnpmInstallFailed;
+            var child = try std.process.spawn(io, .{
+                .argv = &.{ "pnpm", "install" },
+                .cwd = ui_dir,
+            });
+
+            const term = try child.wait(io);
+            switch (term) {
+                .exited => |code| {
+                    if (code != 0) {
+                        return error.PnpmInstallFailed;
+                    }
+                },
+                .signal => {
+                    return error.ProcessTerminated;
+                },
+                .stopped, .unknown => {
+                    return error.ProcessTerminated;
+                },
             }
 
             const node_modules_path = try std.fs.path.join(b.allocator, &.{ ui_dir, "node_modules" });
             defer b.allocator.free(node_modules_path);
 
-            const node_modules_dir = try b.build_root.handle.openDir(node_modules_path, .{ .iterate = true });
+            const node_modules_dir = try b.build_root.handle.openDir(io, node_modules_path, .{ .iterate = true });
             var walker = try node_modules_dir.walk(b.allocator);
-            while (try walker.next()) |entry| {
+            while (try walker.next(io)) |entry| {
                 switch (entry.kind) {
                     .file => {
                         const sub = try std.fs.path.join(b.allocator, &.{ node_modules_path, entry.path });
@@ -69,10 +82,10 @@ const UiBuildStep = struct {
         defer build_man.deinit();
 
         // Add ui sources to manifest
-        var dir = try b.build_root.handle.openDir(ui_dir, .{ .iterate = true, .follow_symlinks = false });
+        var dir = try b.build_root.handle.openDir(io, ui_dir, .{ .iterate = true, .follow_symlinks = false });
 
         var walker = try dir.walk(b.allocator);
-        while (try walker.next()) |entry| {
+        while (try walker.next(io)) |entry| {
             switch (entry.kind) {
                 .file => {
                     const sub = try std.fs.path.join(b.allocator, &.{ ui_dir, entry.path });
@@ -82,7 +95,7 @@ const UiBuildStep = struct {
                 },
                 .directory => {
                     if (std.mem.eql(u8, entry.path, "build") or std.mem.eql(u8, entry.path, ".svelte-kit")) {
-                        walker.leave();
+                        walker.leave(io);
                         continue;
                     }
                 },
@@ -92,13 +105,24 @@ const UiBuildStep = struct {
 
         const build_cache_hit = try step.cacheHitAndWatch(&build_man);
         if (!build_cache_hit) {
-            var child = std.process.Child.init(&.{ "pnpm", "run", "build" }, allocator);
-            child.cwd = ui_dir;
-            child.stdout_behavior = .Inherit;
-            child.stderr_behavior = .Inherit;
-            const term = try child.spawnAndWait();
-            if (term != .Exited or term.Exited != 0) {
-                return error.UiBuildFailed;
+            var child = try std.process.spawn(io, .{
+                .argv = &.{ "pnpm", "run", "build" },
+                .cwd = ui_dir,
+            });
+
+            const term = try child.wait(io);
+            switch (term) {
+                .exited => |code| {
+                    if (code != 0) {
+                        return error.UiBuildFailed;
+                    }
+                },
+                .signal => {
+                    return error.ProcessTerminated;
+                },
+                .stopped, .unknown => {
+                    return error.ProcessTerminated;
+                },
             }
             try step.writeManifestAndWatch(&build_man);
         }

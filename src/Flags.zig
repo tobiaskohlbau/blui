@@ -60,7 +60,7 @@ fn boolFlag(self: *Flags, allocator: std.mem.Allocator, name: []const u8, value:
     try self.flags.put(allocator, name, .{ .boolean = flag });
 }
 
-pub fn parse(self: *Flags, args: *std.process.ArgIterator) !void {
+pub fn parse(self: *Flags, allocator: std.mem.Allocator, args: *const std.process.Args) !void {
     const ParseState = enum { next, arg, bool_flag, string_flag };
     const FlagType = union(ParseState) {
         next: void,
@@ -69,10 +69,13 @@ pub fn parse(self: *Flags, args: *std.process.ArgIterator) !void {
         string_flag: *Value([]const u8),
     };
 
-    const start: FlagType = .{ .arg = args.next() orelse return error.InvalidArglist };
+    var it = try args.iterateAllocator(allocator);
+    defer it.deinit();
+
+    const start: FlagType = .{ .arg = it.next() orelse return error.InvalidArglist };
     sw: switch (start) {
         .next => {
-            if (args.next()) |arg| {
+            if (it.next()) |arg| {
                 continue :sw FlagType{ .arg = arg };
             } else {
                 break :sw;
@@ -98,7 +101,7 @@ pub fn parse(self: *Flags, args: *std.process.ArgIterator) !void {
         },
         .bool_flag => |flag| {
             flag.*.found = true;
-            if (args.next()) |arg| {
+            if (it.next()) |arg| {
                 if (std.ascii.startsWithIgnoreCase(arg, "--") or std.ascii.startsWithIgnoreCase(arg, "-")) {
                     flag.value.* = true;
                     continue :sw FlagType{ .arg = arg };
@@ -112,7 +115,7 @@ pub fn parse(self: *Flags, args: *std.process.ArgIterator) !void {
             }
         },
         .string_flag => |flag| {
-            flag.value.* = args.next() orelse return error.InvalidArgument;
+            flag.value.* = it.next() orelse return error.InvalidArgument;
             flag.found = true;
             continue :sw .next;
         },
@@ -133,4 +136,19 @@ pub fn parse(self: *Flags, args: *std.process.ArgIterator) !void {
             },
         }
     }
+}
+
+pub fn deinit(self: *Flags, allocator: std.mem.Allocator) void {
+    var it = self.flags.valueIterator();
+    while (it.next()) |value| {
+        switch (value.*) {
+            .string => |s| {
+                allocator.destroy(s);
+            },
+            .boolean => |b| {
+                allocator.destroy(b);
+            },
+        }
+    }
+    self.flags.deinit(allocator);
 }

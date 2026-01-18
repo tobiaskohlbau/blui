@@ -15,15 +15,15 @@ const File = struct {
     serial: []const u8,
 };
 
-fn getConfigPath(allocator: std.mem.Allocator) ![]const u8 {
+fn getConfigPath(allocator: std.mem.Allocator, environ: std.process.Environ) ![]const u8 {
     switch (builtin.target.os.tag) {
         .macos, .linux => {
-            const config_folder = std.process.getEnvVarOwned(allocator, "XDG_CONFIG_HOME") catch return error.NoXdgConfigHome;
+            const config_folder = environ.getAlloc(allocator, "XDG_CONFIG_HOME") catch return error.NoXdgConfigHome;
             defer allocator.free(config_folder);
             return try std.fs.path.join(allocator, &.{ config_folder, "blui", "config.zon" });
         },
         .windows => {
-            const appdata = std.process.getEnvVarOwned(allocator, "APPDATA") catch return error.NoAppData;
+            const appdata = std.environ.getAlloc(allocator, "APPDATA") catch return error.NoAppData;
             defer allocator.free(appdata);
             return try std.fs.path.join(allocator, &.{ appdata, "blui", "config.zon" });
         },
@@ -31,20 +31,20 @@ fn getConfigPath(allocator: std.mem.Allocator) ![]const u8 {
     }
 }
 
-pub fn save(c: *Config, allocator: std.mem.Allocator) !void {
-    const path = try getConfigPath(allocator);
+pub fn save(c: *Config, allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) !void {
+    const path = try getConfigPath(allocator, environ);
     defer allocator.free(path);
 
     const config_dir = std.fs.path.dirname(path);
     if (config_dir) |dir| {
-        try std.fs.cwd().makePath(dir);
+        try std.Io.Dir.cwd().createDirPath(io, dir);
     }
 
-    const file = try std.fs.createFileAbsolute(path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.createFileAbsolute(io, path, .{});
+    defer file.close(io);
 
     var buf: [8192]u8 = undefined;
-    var writer = file.writer(&buf);
+    var writer = file.writer(io, &buf);
 
     const config_file: File = .{
         .access_code = c.access_code,
@@ -56,24 +56,24 @@ pub fn save(c: *Config, allocator: std.mem.Allocator) !void {
     try writer.interface.flush();
 }
 
-pub fn load(c: *Config, allocator: std.mem.Allocator, io: std.Io) !void {
-    const path = try getConfigPath(allocator);
+pub fn load(c: *Config, allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) !void {
+    const path = try getConfigPath(allocator, environ);
     defer allocator.free(path);
 
-    const file = std.fs.openFileAbsolute(path, .{}) catch |err| switch (err) {
+    const file = std.Io.Dir.openFileAbsolute(io, path, .{}) catch |err| switch (err) {
         error.FileNotFound => blk: {
-            try c.save(allocator);
-            const f = try std.fs.openFileAbsolute(path, .{});
+            try c.save(allocator, io, environ);
+            const f = try std.Io.Dir.openFileAbsolute(io, path, .{});
             break :blk f;
         },
         else => return err,
     };
-    defer file.close();
+    defer file.close(io);
 
     var buf: [8192]u8 = undefined;
     var reader = file.reader(io, &buf);
 
-    const stat = try file.stat();
+    const stat = try file.stat(io);
     const data = try allocator.alloc(u8, stat.size + 1);
     defer allocator.free(data);
     data[stat.size] = 0;

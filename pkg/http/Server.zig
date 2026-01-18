@@ -37,7 +37,7 @@ pub fn listen(s: *Server) !void {
         const stream = try tcp_server.accept(s.io);
         group.async(s.io, handleRequest, .{ s, stream });
     }
-    group.wait(s.io);
+    try group.await(s.io);
 }
 
 fn handleRequest(s: *Server, stream: net.Stream) void {

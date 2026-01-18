@@ -95,8 +95,8 @@ const Connection = struct {
             assert(base.ptr + alloc_len == socket_read_buffer.ptr + socket_read_buffer.len);
             @memcpy(host_buffer, remote_host);
             const tls: *Tls = @ptrCast(base);
-            var random_buffer: [176]u8 = undefined;
-            std.crypto.random.bytes(&random_buffer);
+            var random_buffer: [240]u8 = undefined;
+            std.Io.random(client.io, &random_buffer);
             const now = client.now orelse try Io.Clock.real.now(client.io);
             tls.* = .{
                 .connection = .{
