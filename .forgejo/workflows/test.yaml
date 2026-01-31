@@ -1,13 +1,23 @@
+name: Test
+
 on:
-  push: {}
   pull_request: {}
+  push:
+    branches:
+      - main
   workflow_dispatch: {}
 
-name: Test
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
   build-linux:
-    runs-on: codeberg-small
+    runs-on: codeberg-small-lazy
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
